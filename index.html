@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Payment Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-blue-600 text-white p-4">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-2xl font-bold">Sales Management System</h1>
+                <div class="space-x-4">
+                    <button onclick="showSection('sales')" class="hover:text-blue-200">New Sale</button>
+                    <button onclick="showSection('analytics')" class="hover:text-blue-200">Analytics</button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Sales Entry Section -->
+        <div id="sales" class="container mx-auto p-4">
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-2xl font-bold mb-4">New Sale Entry</h2>
+                <form id="saleForm" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium">Customer Name</label>
+                            <input type="text" id="customerName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Product</label>
+                            <input type="text" id="product" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Amount</label>
+                            <input type="number" id="amount" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Payment Method</label>
+                            <select id="paymentMethod" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                <option value="cash">Cash</option>
+                                <option value="card">Card</option>
+                                <option value="upi">UPI</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save Sale</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div id="analytics" class="container mx-auto p-4 hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-2xl font-bold mb-4">Sales Analytics</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <canvas id="salesByMethod"></canvas>
+                    </div>
+                    <div>
+                        <canvas id="dailySales"></canvas>
+                    </div>
+                </div>
+                <div class="mt-8">
+                    <h3 class="text-xl font-bold mb-4">Recent Sales</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-4 py-2">Date</th>
+                                    <th class="px-4 py-2">Customer</th>
+                                    <th class="px-4 py-2">Product</th>
+                                    <th class="px-4 py-2">Amount</th>
+                                    <th class="px-4 py-2">Payment Method</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salesTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let salesData = [];
+        let methodChart = null;
+        let dailyChart = null;
+
+        // Function to show/hide sections
+        function showSection(section) {
+            document.getElementById('sales').classList.add('hidden');
+            document.getElementById('analytics').classList.add('hidden');
+            document.getElementById(section).classList.remove('hidden');
+            if(section === 'analytics') {
+                updateAnalytics();
+            }
+        }
+
+        // Function to save sale
+        document.getElementById('saleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const sale = {
+                date: new Date().toISOString(),
+                customerName: document.getElementById('customerName').value,
+                product: document.getElementById('product').value,
+                amount: document.getElementById('amount').value,
+                paymentMethod: document.getElementById('paymentMethod').value
+            };
+
+            // Save to MongoDB
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer Dec467VjHuN1KpfcLtI8LRhAKlY2',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug: 'sales-management-123456',
+                        action: 'create',
+                        collection: 'sales',
+                        data: sale
+                    })
+                });
+
+                if (response.ok) {
+                    alert('Sale saved successfully!');
+                    document.getElementById('saleForm').reset();
+                    loadSalesData();
+                } else {
+                    throw new Error('Failed to save sale');
+                }
+            } catch (error) {
+                alert('Error saving sale: ' + error.message);
+            }
+        });
+
+        // Load sales data
+        async function loadSalesData() {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer Dec467VjHuN1KpfcLtI8LRhAKlY2',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug: 'sales-management-123456',
+                        action: 'read',
+                        collection: 'sales'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    salesData = data.result;
+                    updateAnalytics();
+                }
+            } catch (error) {
+                console.error('Error loading sales data:', error);
+            }
+        }
+
+        // Update analytics
+        function updateAnalytics() {
+            updateSalesTable();
+            updateCharts();
+        }
+
+        // Update sales table
+        function updateSalesTable() {
+            const tbody = document.getElementById('salesTable');
+            tbody.innerHTML = '';
+            salesData.slice(-10).forEach(sale => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="border px-4 py-2">${new Date(sale.date).toLocaleDateString()}</td>
+                    <td class="border px-4 py-2">${sale.customerName}</td>
+                    <td class="border px-4 py-2">${sale.product}</td>
+                    <td class="border px-4 py-2">₹${sale.amount}</td>
+                    <td class="border px-4 py-2">${sale.paymentMethod}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Update charts
+        function updateCharts() {
+            // Payment method distribution
+            const methodCtx = document.getElementById('salesByMethod');
+            const methodData = {};
+            salesData.forEach(sale => {
+                methodData[sale.paymentMethod] = (methodData[sale.paymentMethod] || 0) + Number(sale.amount);
+            });
+
+            if (methodChart) methodChart.destroy();
+            methodChart = new Chart(methodCtx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(methodData),
+                    datasets: [{
+                        data: Object.values(methodData),
+                        backgroundColor: ['#2563eb', '#7c3aed', '#db2777']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Sales by Payment Method'
+                        }
+                    }
+                }
+            });
+
+            // Daily sales trend
+            const dailyCtx = document.getElementById('dailySales');
+            const dailyData = {};
+            salesData.forEach(sale => {
+                const date = new Date(sale.date).toLocaleDateString();
+                dailyData[date] = (dailyData[date] || 0) + Number(sale.amount);
+            });
+
+            if (dailyChart) dailyChart.destroy();
+            dailyChart = new Chart(dailyCtx, {
+                type: 'line',
+                data: {
+                    labels: Object.keys(dailyData),
+                    datasets: [{
+                        label: 'Daily Sales',
+                        data: Object.values(dailyData),
+                        borderColor: '#2563eb',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Daily Sales Trend'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initial load
+        loadSalesData();
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
